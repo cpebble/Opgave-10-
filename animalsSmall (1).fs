@@ -1,4 +1,8 @@
+
 module animals
+open System 
+open System.Security.Policy
+
 
 type symbol = char
 type position = int * int
@@ -42,8 +46,8 @@ type wolf (repLen : int, hungLen : int) =
   member this.hunger = _hunger
   member this.updateHunger () =
     _hunger <- _hunger - 1
-    if _hunger <= 0 then
-      this.position <- None // Starve to death
+    //if _hunger <= 0 then
+      //this.position <- None // Starve to death
   member this.resetHunger () =
     _hunger <- hungLen
   member this.tick () : wolf option =
@@ -56,7 +60,7 @@ type board =
    mutable wolves : wolf list;}
 
 /// An environment is a chess-like board with all animals and implenting all rules.
-type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : int, wolvesRepLen : int, wolvesHungLen : int, verbose : bool) =
+type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : int, wolvesRepLen : int, wolvesHungLen : int) =
   let _board : board = { //et board består af to lister, der hver især indeholder mooses og wolves 
     width = boardWidth;
     moose = List.init NMooses (fun i -> moose(mooseRepLen)); // en liste med NMooses-antal mooses, der alle har replen som mooseReplen
@@ -71,6 +75,8 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
     for w in b.wolves do
       Option.iter (fun p -> arr.[fst p, snd p] <- wSymbol) w.position
     arr
+  let shuffleR (r : Random) xs = xs |> List.sortBy (fun _ -> r.Next())
+
 
   /// return the coordinates of any empty field on the board.
   let anyEmptyField (b : board) : position = //finder det første tomme felt på boardet 
@@ -85,8 +91,8 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
   let _findAllNeighboor (position: position) = //returnerer alle nabopladser for et dyr 
     let i,j = position 
     let allNeighboors : position list = [(i - 1, j - 1); (i - 1, j); (i - 1, j + 1); (i, j - 1); (i, j + 1); (i + 1, j + 1); (i - 1, j + 1); (i + 1, j - 1)]
-    let allValiedNeighboors : position list = List.filter (fun x -> (fst x >= 0 && fst x < boardWidth && snd x >= 0 && snd x < boardWidth)) allNeighboors 
-    allValiedNeighboors 
+    let allValiedNeighboors : position list = List.filter (fun x -> (fst x >= 0 && fst x <= (boardWidth - 1) && snd x >= 0 && snd x <= (boardWidth - 1))) allNeighboors 
+    shuffleR rnd allValiedNeighboors 
   
   let getAllPositons (b: board) = //en liste med alle optaget positioner på boardet 
     let mutable listWithPosition = []
@@ -95,6 +101,14 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
     for j in 0..(_board.wolves.Length - 1) do   
       listWithPosition <- (_board.wolves.[j].position.Value) :: listWithPosition 
     listWithPosition 
+
+  let getAllAnimals (b: board) = //en liste med alle optaget pladser og hvilke slags dyr der står på pladserne 
+    let mutable listWithAnimals = []
+    for i in 0..(_board.moose.Length - 1) do   
+      listWithAnimals <- (_board.moose.[i].position, 'm') :: listWithAnimals
+    for j in 0..(_board.wolves.Length - 1) do   
+      listWithAnimals <- (_board.wolves.[j].position, 'w') :: listWithAnimals 
+    listWithAnimals 
     
 
   // populate the board with animals placed at random.
@@ -103,14 +117,73 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
   do for w in _board.wolves do
        w.position <- Some (anyEmptyField _board)
 
-  let mooseTick (moose: moose) (boardLength: int ) = 
-    let numberOfMooses = boardLength 
+
+  //let mutable _allPositions = getAllPositons _board 
+  let mutable allAnimals = getAllAnimals _board //indeholder en list med alle positioner og de dyr, der står på positionerne
+  //denne skal updateres undervejs 
+
+
+  let wolfTick (wolf: wolf) = 
+
+    let thisWolf = wolf 
+    if thisWolf.hunger <= 0 then    
+      allAnimals <- List.filter (fun (x: position option * char) -> fst x <> thisWolf.position) allAnimals //filtre den døde ulv væk fra allAnimals
+      _board.wolves <- List.filter (fun (x: wolf) -> x <> thisWolf) _board.wolves  
+
+
+    else     
+      let allNeighboors = _findAllNeighboor thisWolf.position.Value 
+      let moosesBeside = (List.filter (fun (x: moose) -> List.contains x.position.Value allNeighboors) _board.moose) |> shuffleR rnd  //en liste med alle mooses placeret på nabopladserne 
+      let oldPositon = thisWolf.position 
+      if not moosesBeside.IsEmpty then   
+        let newPosition = moosesBeside.[0].position 
+        thisWolf.position <- newPosition 
+        allAnimals <- List.filter (fun (x: position option * char) -> fst x <> oldPositon) allAnimals
+        allAnimals <- List.filter (fun (x: position option * char) -> fst x <> newPosition) allAnimals //filtre moosen der er blevet spist fra allAnimals
+        _board.moose <- List.filter (fun (x: moose) -> x.position <> newPosition) _board.moose //filtre moosen der lige er blevet spist væk 
+        allAnimals <- allAnimals @ [newPosition, 'w']
+        thisWolf.resetHunger()
+        thisWolf.updateReproduction()
+
+      else if thisWolf.reproduction <= 0 then 
+        let position = anyEmptyField _board 
+        let newWolf = new wolf(wolvesRepLen, wolvesHungLen)
+        newWolf.position <- Some(position) 
+        thisWolf.resetReproduction () 
+        allAnimals <- allAnimals @ [Some(position), 'w'] //tilføjer den nye ulv til listen med ulve 
+        _board.wolves <- _board.wolves @ [newWolf] 
+        thisWolf.updateHunger()
+
+      else 
+        let allPositions = getAllPositons _board 
+        //let allNeighboors = _findAllNeighboor thisWolf.position.Value 
+        let mutable isFree = false
+        let mutable i = 0 
+        let mutable newPosition = None 
+        while not isFree && i <= (allNeighboors.Length - 1) do   
+          let mutable currentNeighbor = allNeighboors.[i] 
+          if not (List.contains currentNeighbor allPositions) then   
+            isFree <- true 
+            newPosition <- Some(currentNeighbor) 
+          else 
+            i <- i + 1 
+        if newPosition.IsSome then  
+          allAnimals <- List.filter (fun (x: position option * char) -> fst x <> oldPositon) allAnimals
+          thisWolf.position <- newPosition 
+          allAnimals <- allAnimals @ [newPosition, 'w']
+        thisWolf.updateHunger ()
+        thisWolf.updateReproduction()    
+
+
+
+  let mooseTick (moose: moose) = 
     let thisMoose = moose 
     if thisMoose.reproduction <= 0 then //tjekker om den er klar til at føde
         let position = anyEmptyField _board //finder et tomt felt på brættet 
         let newMoose = new moose(mooseRepLen) //laver en ny moose-instance 
         newMoose.position <- Some(position)
-        thisMoose.resetReproduction () //--
+        allAnimals <- allAnimals @ [(Some(position), 'm')] //tilføjer den nye moose position til alle allAnimals
+        thisMoose.resetReproduction () 
         _board.moose <- _board.moose @ [newMoose] //sammensætter den nye moose med listen med de eksisterende mooses
       
     else 
@@ -126,149 +199,38 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
           newPosition <- Some(currentNeighbor)
         else 
           i <- i + 1
-        if newPosition.IsSome then 
-          thisMoose.position <- newPosition 
-          thisMoose.updateReproduction()
+      if newPosition.IsSome then 
+        let oldPositon = thisMoose.position 
+        allAnimals <- List.filter (fun (x: position option * char) -> fst x <> oldPositon) allAnimals //filtre den gamle position væk 
+        thisMoose.position <- newPosition 
+        allAnimals <- allAnimals @ [newPosition, 'm'] 
+      thisMoose.updateReproduction()
 
+     
 
   member this.size = boardWidth*boardWidth
   member this.count = _board.moose.Length + _board.wolves.Length
   member this.board = _board
+  member this.mooseLength = _board.moose.Length 
+  member this.wolvesLength = _board.wolves.Length 
 
 
   member this.tick() = 
-    let numberOfMooses = _board.moose.Length 
-    let numberOfWolfes = _board.wolves.Length 
-  
-    //suffle allAnimals
-    for m in 0..(numberOfMooses - 1) do   //kalder moose.tick  
-      let mutable thismoose = _board.moose.[m]
-      mooseTick thismoose numberOfMooses 
+    let mutable allAnimalsInTick = allAnimals // de dyr vi ønsker at foretage træk på nu 
 
-    //for i in 0..(numberOfWolfes - 1) do   //kalder wolf.tick  
-     // printfn"%A" _board.wolves.[i]
+    let randomOrder = shuffleR rnd allAnimalsInTick 
 
-
-  member this.tick2 () = 
-    printfn"Med alle ulve:%A" _board.wolves  
-    _board.wolves <- List.filter (fun (x: wolf) -> x.position.IsSome) _board.wolves 
-    printfn"Kun med levende ulve:%A" _board.wolves 
-
-    let numberOfWolfes = _board.wolves.Length 
-    for w in 0..(numberOfWolfes - 1) do   
-
-      let mutable thisWolf = _board.wolves.[w]
-
-      if thisWolf.reproduction <= 0 then   
-        let position = anyEmptyField _board 
-        let newWolf = new wolf(wolvesRepLen, wolvesHungLen)
-        newWolf.position <- Some(position)
-        thisWolf.updateHunger ()
-        thisWolf.resetReproduction ()
-        _board.wolves <- _board.wolves @ [newWolf] //den nye ulv bliver sat tilsidst i listen af ulve 
-
-      (*else 
-          let allNeighboors = _findAllNeighboor thisWolf.position.Value //finder en liste med dennes naboer 
-          let moosesBeside = List.filter (fun (x: moose) -> List.contains x.position.Value allNeighboors) _board.moose //en liste med alle mooses placeret på nabopladserne 
-          printfn"mooses ved siden af %A" moosesBeside //  TEST   
-          if (not moosesBeside.IsEmpty) then   
-            printfn"Gamle position%A" thisWolf.position
-            let newPosition = moosesBeside.[0].position //vælger den første moose i listen af mooses ved siden af
-            thisWolf.position <- newPosition
-            printfn"Nye position%A" thisWolf.position
-            _board.moose <- List.filter (fun (x: moose) -> x.position <> newPosition) _board.moose //filtre moosen der lige er blevet spist væk 
-            thisWolf.resetHunger ()*) 
-        else 
-          let allPositions = getAllPositons _board 
-          printfn"alle optaget positioner: %A" allPositions 
-          let allNeighboors = _findAllNeighboor thisWolf.position.Value //finder en liste med dennes naboer 
-          let mutable newPosition = None 
-          let mutable isFree = false 
-          let mutable i = 0 
-          while not isFree && i <= (allNeighboors.Length - 1) do  
-            let mutable currentNeighbor = allNeighboors.[i] 
-            if not (List.contains currentNeighbor allPositions) then  
-                isFree <- true 
-                newPosition <- Some(currentNeighbor) 
-            else   
-              i <- i + 1 
-            if newPosition.IsSome then  
-              thisWolf.position <- newPosition 
-            else 
-              thisWolf.position <- thisWolf.position 
-          printfn"thisWolfs position: %A" thisWolf.position
-          thisWolf.updateReproduction () 
-          thisWolf.updateHunger () 
-
-
-
-
-          (*    else 
-      let allPositions = getAllPositons _board //indeholder alle optaget pladser på boardet 
-      let allNeighboors = _findAllNeighboor thisMoose.position.Value //indeholder en liste med alle nabopladser
-      let mutable isFree = false 
-      let mutable i = 0 
-      let mutable newPosition = None 
-      while not isFree && i <= (allNeighboors.Length - 1) do //looper indtil den når igennem hele listen med naboer eller finder en ledig plads
-        let mutable currentNeighbor = allNeighboors.[i] //indeholder den nuværende plads, vi tjekker om er ledig
-        if not (List.contains currentNeighbor allPositions) then //tjekker om listen med alle optaget pladser indeholder currentNeighbor
-          isFree <- true                                         // hvis ikke den gør det ændres isFree til true og mooses position ændres til den nye position 
-          newPosition <- Some(currentNeighbor)
-        else 
-          i <- i + 1
-        if newPosition.IsSome then 
-          thisMoose.position <- newPosition 
-          thisMoose.updateReproduction()*) 
-
-
-
-
-    (*member this.tick2 () = 
-      _board.wolves <- List.filter (fun (x: wolf) -> x.position.IsSome) _board.wolves //sletter alle wolfes, vis position er None
-      let numberOfWolfes = _board.wolves.Length 
-      for w in 0..(numberOfWolfes - 1) do 
-        let mutable thisWolf = _board.wolves.[w] 
-
-        if thisWolf.reproduction <= 0 then 
-          let position = anyEmptyField _board 
-          let newWolf = new wolf(wolvesRepLen, wolvesHungLen)  
-          newWolf.position <- Some(position)
-          thisWolf.resetReproduction () 
-          thisWolf.updateHunger()
-          _board.wolves <- _board.wolves @ [newWolf]
-          
-        else 
-          let allNeighboors = _findAllNeighboor thisWolf.position.Value //indeholder en liste med alle dens naboer 
-          let moosesBeside = List.filter (fun (x: moose) -> (List.contains x.position.Value allNeighboors)) _board.moose //en liste med alle mooses, der er placeret på en af nabopladserne 
-          if (not moosesBeside.IsEmpty) then   
-            let newPosition = moosesBeside.[0].position //vælger den første mooses 
-            thisWolf.position <- newPosition // sætter thisWolfs position til denne 
-            _board.moose <- List.filter (fun (x: moose) -> x.position <> newPosition) _board.moose //updaterer moose listen, hvor den moose med denne position filtres væk 
-            thisWolf.updateHunger ()
-            thisWolf.updateReproduction () 
-
-          else   
-            let allPositions = getAllPositons _board 
-            let mutable isFree = false 
-            let mutable i = 0 
-            let mutable newPosition = None 
-            while not isFree && i <= (allNeighboors.Length - 1) do //looper indtil den når igennem hele listen med naboer eller finder en ledig plads
-              let mutable currentNeighbor = allNeighboors.[i] //indeholder den nuværende plads, vi tjekker om er ledig
-              if not (List.contains currentNeighbor allNeighboors) then //tjekker om listen med alle optaget pladser indeholder currentNeighbor
-                isFree <- true                                         // hvis ikke den gør det ændres isFree til true og mooses position ændres til den nye position 
-                newPosition <- Some(currentNeighbor)
-              else 
-                i <- i + 1
-              if newPosition.IsSome then 
-                thisWolf.position <- newPosition 
-                thisWolf.updateReproduction()  
-                thisWolf.updateHunger ()    *)          
-
-            
-
-
-            
-   
+    
+    
+    for i in 0..(randomOrder.Length - 1) do 
+      let thisAnimal = randomOrder.[i] 
+      if (List.contains thisAnimal allAnimals) then  
+        if (snd thisAnimal) = 'm' then 
+          let thisMoose = List.find (fun (x: moose) -> x.position = (fst thisAnimal)) _board.moose  
+          mooseTick thisMoose 
+        if (snd thisAnimal) = 'w' then    
+          let thisWolf = List.find (fun (x: wolf) -> x.position = (fst thisAnimal)) _board.wolves 
+          wolfTick thisWolf 
 
       
 
@@ -288,14 +250,31 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
 
 
 
-let newBoard = new environment(4, 2, 10,  2, 10, 5, true) 
-printfn"%A" (newBoard.ToString ()) 
+let newBoard = new environment(5, 5, 5,  2, 5, 2) 
 
 
-
-for i in 0..11 do 
-  printfn"Før update:"
-  printfn"%A" (newBoard.ToString ()) 
+//Kalder tick et bestemt antal gange og printer det tilsvarende board 
+(*for i in 0..10 do 
   printfn"Update %A" i 
-  newBoard.tick2()
-  printfn"%A" (newBoard.ToString ())
+  printfn"Antal mooses: %A" (newBoard.board.moose.Length)
+  printfn"Antal wolves: %A" (newBoard.board.wolves.Length)
+
+  newBoard.tick()
+
+  printfn"%A" (newBoard.ToString ())*) 
+
+
+//Kalder ticks et bestemt antal gange og laver en liste bestående af antal wolves og mooses per tick 
+let app (boardWidth : int) (nMooses : int) (mooseRepLen : int) (nWolves : int) (wolvesRepLen : int) (wolvesHungLen : int) (numberofTicks: int) = 
+  let newBoard = new environment (boardWidth, nMooses, mooseRepLen, nWolves, wolvesRepLen, wolvesHungLen)
+  let mutable listWithTicks = []
+  for i in 0..(numberofTicks - 1) do 
+    newBoard.tick()
+    listWithTicks <- listWithTicks @ [(i, newBoard.mooseLength, newBoard.wolvesLength)] 
+  listWithTicks
+
+let lst = app 5 5 5 2 5 2 8
+
+printfn"%A" lst   
+
+
