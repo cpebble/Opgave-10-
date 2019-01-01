@@ -1,7 +1,7 @@
 
 module animals
 open System 
-open System.Security.Policy
+open System
 
 
 type symbol = char
@@ -250,8 +250,7 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
 
 
 
-let newBoard = new environment(5, 5, 5,  2, 5, 2) 
-
+//let newBoard = new environment(5, 5, 5,  2, 5, 2) 
 
 //Kalder tick et bestemt antal gange og printer det tilsvarende board 
 (*for i in 0..10 do 
@@ -263,6 +262,10 @@ let newBoard = new environment(5, 5, 5,  2, 5, 2)
 
   printfn"%A" (newBoard.ToString ())*) 
 
+let writeToFile (lst:'a List) (filename:string) :unit =
+  use file = (System.IO.File.CreateText filename)
+  for (a,b,c) in lst do
+    file.Write (sprintf "%A:%A:%A \n" a b c)
 
 //Kalder ticks et bestemt antal gange og laver en liste bestående af antal wolves og mooses per tick 
 let app (boardWidth : int) (nMooses : int) (mooseRepLen : int) (nWolves : int) (wolvesRepLen : int) (wolvesHungLen : int) (numberofTicks: int) = 
@@ -271,10 +274,29 @@ let app (boardWidth : int) (nMooses : int) (mooseRepLen : int) (nWolves : int) (
   for i in 0..(numberofTicks - 1) do 
     newBoard.tick()
     listWithTicks <- listWithTicks @ [(i, newBoard.mooseLength, newBoard.wolvesLength)] 
-  listWithTicks
+  printfn "%A" listWithTicks
+  writeToFile listWithTicks "output.txt"
 
-let lst = app 5 5 5 2 5 2 8
+//app 5 5 5 2 5 2 8
+[<EntryPoint>]
+let main argv =
+  let mutable arg_list = []
+  try
+    for arg in argv do
+      let refVar = ref 0 
+      if (Int32.TryParse(arg,refVar)) then
+        arg_list <- arg_list @[!refVar]
+      else
+        failwith "Conversion failed"
+  with
+    |ex -> printfn "%A" ex
 
-printfn"%A" lst   
+  try
+    app arg_list.[0] arg_list.[1] arg_list.[2] arg_list.[3] arg_list.[4] arg_list.[5] arg_list.[6]
+  with
+  |ex -> printfn "somethings fucked up"
+  printfn "%A" (arg_list)
+  0
+    
 
 
