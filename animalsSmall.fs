@@ -118,7 +118,6 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
        w.position <- Some (anyEmptyField _board)
 
 
-  //let mutable _allPositions = getAllPositons _board 
   let mutable allAnimals = getAllAnimals _board //indeholder en list med alle positioner og de dyr, der står på positionerne
   //denne skal updateres undervejs 
 
@@ -156,7 +155,6 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
 
       else 
         let allPositions = getAllPositons _board 
-        //let allNeighboors = _findAllNeighboor thisWolf.position.Value 
         let mutable isFree = false
         let mutable i = 0 
         let mutable newPosition = None 
@@ -234,7 +232,6 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
 
       
 
-     // Intentionally left blank. Insert code that process animals here.
   override this.ToString () =
     let arr = draw _board
     let mutable ret = "  "
@@ -248,19 +245,6 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
       ret <- ret + "\n"
     ret
 
-
-
-//let newBoard = new environment(5, 5, 5,  2, 5, 2) 
-
-//Kalder tick et bestemt antal gange og printer det tilsvarende board 
-(*for i in 0..10 do 
-  printfn"Update %A" i 
-  printfn"Antal mooses: %A" (newBoard.board.moose.Length)
-  printfn"Antal wolves: %A" (newBoard.board.wolves.Length)
-
-  newBoard.tick()
-
-  printfn"%A" (newBoard.ToString ())*) 
 
 let writeToFile (lst:'a List) (filename:string) :unit =
   use file = (System.IO.File.CreateText filename)
