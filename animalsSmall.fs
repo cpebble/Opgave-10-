@@ -90,7 +90,7 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
 
   let _findAllNeighboor (position: position) = //returnerer alle nabopladser for et dyr 
     let i,j = position 
-    let allNeighboors : position list = [(i - 1, j - 1); (i - 1, j); (i - 1, j + 1); (i, j - 1); (i, j + 1); (i + 1, j + 1); (i - 1, j + 1); (i + 1, j - 1)]
+    let allNeighboors : position list = [(i - 1, j - 1); (i - 1, j); (i - 1, j + 1); (i, j - 1); (i, j + 1); (i + 1, j - 1); (i + 1, j); (i + 1, j + 1)]
     let allValiedNeighboors : position list = List.filter (fun x -> (fst x >= 0 && fst x <= (boardWidth - 1) && snd x >= 0 && snd x <= (boardWidth - 1))) allNeighboors 
     shuffleR rnd allValiedNeighboors 
   
@@ -245,7 +245,175 @@ type environment (boardWidth : int, NMooses : int, mooseRepLen : int, NWolves : 
       ret <- ret + "\n"
     ret
 
+  //******** test *********
 
+<<<<<<< HEAD
+=======
+  //Test af findAllNeigboors
+  member this.testFindAllNeigboors (pos: position) (exceptedOutput: position list) = 
+    let actuelOutput = _findAllNeighboor pos 
+    let mutable hasAll = true 
+    for i in 0..(exceptedOutput.Length - 1) do 
+      if not (List.contains exceptedOutput.[i] actuelOutput) then   
+        hasAll <- false 
+    hasAll 
+
+  //Test af testGetAllPositions 
+  member this.testGetAllPositions (b: board) (exceptedOutput: position list) = 
+    let actuelOutput = getAllPositons b 
+    exceptedOutput = actuelOutput 
+
+
+  member this.testgetAllAnimals (b: board) (exceptedOutput: (position option * char) list) = 
+    let actuelOutput = getAllAnimals b 
+    exceptedOutput = actuelOutput 
+
+  member this.testWolfTickHunger (w: wolf) = //exceptedLength er længden på den forventede liste
+    let exceptedLength = _board.wolves.Length - 1 
+    wolfTick w 
+    _board.wolves.Length = exceptedLength && not(List.contains w _board.wolves) //listen skal gerne være en mindre, da ulven er død 
+  
+  member this.testWolfTickReproduction (w: wolf)  = 
+    let exceptedLength = _board.wolves.Length + 1 
+    printfn"Forventet antal ulve: %A" exceptedLength
+    wolfTick w 
+    printfn"faktiske antal ulve: %A" _board.wolves.Length 
+    _board.wolves.Length = exceptedLength && w.reproduction = wolvesRepLen //Listen skal gerne være en længere, da der er tilføjet en ny ulv
+
+  
+  member this.testWolfTickEat (w: wolf) = 
+    let numberOfWolvesBefore = _board.wolves.Length 
+    let numberOfMoosesBefore = _board.moose.Length 
+    wolfTick w 
+    _board.wolves.Length = numberOfWolvesBefore && _board.moose.Length = numberOfMoosesBefore - 1 && w.hunger = wolvesHungLen
+
+  member this.testWolfTickMove (w: wolf) = 
+    let numberOfWolvesBefore = _board.wolves.Length 
+    let oldPositon = w.position.Value
+    let allNeighboors = _findAllNeighboor w.position.Value 
+    wolfTick w 
+    let newPosition = w.position.Value
+    _board.wolves.Length = numberOfWolvesBefore && not(List.contains oldPositon (getAllPositons _board)) && newPosition <> oldPositon && (List.contains newPosition allNeighboors)
+     
+  member this.testMooseTickReproduction (m: moose)  = 
+    let exceptedLength = _board.moose.Length + 1 
+    printfn"Forventet antal elge: %A" exceptedLength
+    mooseTick m 
+    printfn"Faktiske antal elge: %A" _board.moose.Length
+    _board.moose.Length = exceptedLength && m.reproduction = mooseRepLen 
+  
+  member this.testMooseTickMove (m: moose) = 
+    let numberOfMoosesBefore = _board.moose.Length 
+    let oldPositon = m.position.Value 
+    let allNeighboors = _findAllNeighboor m.position.Value 
+    mooseTick m 
+    let newPosition = m.position.Value 
+    _board.moose.Length = numberOfMoosesBefore && not(List.contains oldPositon (getAllPositons _board)) && newPosition <> oldPositon && (List.contains newPosition allNeighboors) 
+
+
+
+//***** Test ****
+  
+let newBoard = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard2 = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard3 = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard4 = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard5 = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard6 = new environment(5, 5, 5,  2, 5, 2) 
+let newBoard7 = new environment(5, 5, 5,  2, 5, 2) 
+
+
+
+//Test af testFindAllNeigboors
+let posList1 : position list = [(1,1); (1,2); (1,3); (2,1); (2,3); (3,1); (3,2); (3,3)]
+let posList2 : position List = [(1,0);(0,1);(1,1)]
+
+printfn"Test af FindAllNeighboors" 
+printfn"%A" (newBoard.testFindAllNeigboors (2,2) posList1)
+printfn"%A" (newBoard.testFindAllNeigboors (0,0) posList2)
+
+
+//Test af testWolfTickHunger
+let testWolfTickHunger (b: environment) = 
+  let wolfInstans = b.board.wolves.[0] 
+  while  wolfInstans.hunger <> 0 do 
+    wolfInstans.updateHunger()
+
+  printfn"testWolfTickHunger" 
+  printfn"%A"(b.testWolfTickHunger wolfInstans)  
+
+
+//Test af testWolfTickEat
+let testWolfTickEat (b: environment) = 
+  let wolfInstans = b.board.wolves.[0] 
+  let mooseInstans = b.board.moose.[0]
+  wolfInstans.resetHunger()
+  wolfInstans.position <- Some(1,1)
+  mooseInstans.position <- Some(1,2) 
+
+  printfn"testWolfTickEat" 
+  printfn"%A" (b.testWolfTickEat wolfInstans)
+
+
+//Test af testWolfTickReproduction  
+
+let testWolfTickReproduction (b: environment) = 
+  b.board.moose <- []
+  let wolfInstans = b.board.wolves.[0] 
+  while wolfInstans.reproduction > 0 do 
+    wolfInstans.updateReproduction()
+
+  printfn"testWolfTickReproduction" 
+  printfn"%A" (b.testWolfTickReproduction wolfInstans)
+
+
+//Test af testMooseTickReproduction 
+let testMooseTickReproduction (b: environment) = 
+  let mooseInstans = b.board.moose.[0]
+  while mooseInstans.reproduction <> 0 do 
+    mooseInstans.updateReproduction()
+  
+  printfn"testMooseTickReproduction"
+  printfn"%A" (b.testMooseTickReproduction mooseInstans) 
+
+
+//Test af testWolfTickMove 
+
+let testWolfTickMove (b: environment) = 
+  let wolfInstans = b.board.wolves.[0]
+  wolfInstans.resetHunger()
+  wolfInstans.resetReproduction()
+  b.board.wolves <- [wolfInstans]
+  b.board.moose <- []
+
+  printfn"testWolfTickMove"
+  printfn"%A"(b.testWolfTickMove wolfInstans)
+
+//Test af testMooseTickMove
+
+let testMooseTickMove (b: environment) = 
+  let mooseInstans = b.board.moose.[0]
+  mooseInstans.resetReproduction()
+  b.board.moose <- [mooseInstans]
+  b.board.wolves <- []
+
+  printfn"testMooseTickMove"
+  printfn"%A" (b.testMooseTickMove mooseInstans)
+
+
+testWolfTickHunger newBoard2
+testWolfTickEat newBoard3
+testWolfTickReproduction newBoard4
+testMooseTickReproduction newBoard5
+testWolfTickMove newBoard6
+testMooseTickMove newBoard7
+
+
+
+//******** app *********
+
+
+>>>>>>> 76cb662a554e380b7d16ae55bad8f57eee5cf6a3
 let writeToFile (lst:'a List) (filename:string) :unit =
   use file = (System.IO.File.CreateText filename)
   for (a,b,c) in lst do
@@ -280,7 +448,7 @@ let main argv =
   with
   |ex -> printfn "somethings fucked up"
   printfn "%A" (arg_list)
-  0
+  0 
     
 
 
